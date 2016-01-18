@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>DepthClient Example</title>
+	<script type="text/javascript" src="jquery.min.js"></script>
+	<script type="text/javascript" src="jquery.json.js"></script>
+	<script type="text/javascript" src="jquery.jsonrpcclient.js"></script>
+	<script type="text/javascript" src="ofxHTTP.js"></script>
+	<script type="text/javascript" src="BB.js"></script>
+	<script type="text/javascript" src="BB.DepthClient.js"></script>
+	<script src="http://brangerbriz.net/labs/threejs_playGnd/js/three.min.js"></script>
+	<script src="http://brangerbriz.net/labs/threejs_playGnd/js/Detector.js"></script>
+</head>
+<body>
+	<canvas id="canvas"></canvas>
+	<script>
+
+	  var canvas = document.getElementsByTagName('canvas')[0];
+	  var ctx = canvas.getContext('2d');
+	  canvas.width  = window.innerWidth;
+	  canvas.height = window.innerHeight;
+
+	  var trackingFrames = 0;
+	  var drawProjective = true;
+
+	  var camera, scene, renderer;
+	  var geometry, material, meshes = [], users = [];
+
+	  var depthClient = new BB.DepthClient({
+	  	host: '127.0.0.1',
+	  	port: 8197
+	  });
+
+	  depthClient.on('networkError', function(evt) {
+	  	console.log('WebSocket network error');
+	  });
+
+	  depthClient.on('websocketOpen', function(evt) {
+	  	console.log('WebSocket open')
+	  });
+
+	  depthClient.on('websocketClose', function(evt) {
+	  	console.log('WebSocket close')
+	  });
+
+	  depthClient.on('trackingFrame', function(trackingData){
+	  	// if (trackingFrames == 0) console.log(trackingData)
+	  	// if (trackingData.users.length === 1) {
+	  	// 	console.log('User #' + trackingData.users[0].id +
+	  	// 	 ' skeleton status:' + trackingData.users[0].skeleton.state);
+
+	  	// }
+	  	users = trackingData.users;
+	  	trackingFrames++;
+	  });
+
+	  depthClient.on('userNew', function(user) {
+	  	console.log('New user #' + user.id)
+	  });
+
+	  depthClient.on('userLost', function(user) {
+	  	console.log('Lost user #' + user.id)
+	  });
+
+	  depthClient.on('userCalibrating', function(user) {
+	  	console.log('User #' + user.id + ' calibration started');
+	  });
+
+	  depthClient.on('userTracked', function(user) {
+	  	console.log('User #' + user.id + ' tracking started');
+	  });
+
+	  depthClient.on('userCalibrationError', function(user) {
+	  	console.log('User #' + user.id + ' calibration error: ' + user.skeleton.status);
+	  });
+
+	  depthClient.on('userVisible', function(user) {
+	  	console.log('User #' + user.id + ' made visible');
+	  });
+
+	  depthClient.on('userNotVisible', function(user) {
+	  	console.log('User #' + user.id + ' is no longer visible');
+	  });
+
+	  depthClient.on('jointRightHand', function(joint, user) {
+	  	// console.log('User #' + user.id + ' right hand:');
+	  	// console.log(joint);
+	  });
+
+	  // poll to get trackingData framerate
+	  setInterval(function(){
+	  	// console.log(trackingFrames + ' FPS');
+	  	trackingFrames = 0;
+	  }, 1000);
+
+	 function setup() {
+
+		var W = window.innerWidth, H = window.innerHeight;
+		renderer = new THREE.WebGLRenderer();
+		renderer.setSize( W, H );
+		document.body.appendChild( renderer.domElement );
+
+		camera = new THREE.PerspectiveCamera( 50, W/H, 1, 10000 );
+		camera.position.z = 500;
+
+		scene = new THREE.Scene();
+		
+		// paste your code from the geometryGUI here
+		geometry = new THREE.CubeGeometry(20, 20, 20);
+		material = new THREE.MeshNormalMaterial({shading: THREE.FlatShading});
+		
+		for (var i = 0; i < 15; i++) {
+			var mesh = new THREE.Mesh(geometry, material);
+			meshes.push(mesh);
+			scene.add(mesh);
+		}
+
+	}
+
+	function draw() {
+		
+		requestAnimationFrame( draw );
+		
+		if (drawProjective) {
+	  	
+		  	ctx.clearRect(0, 0, canvas.width, canvas.height);
+		  	ctx.save();
+		  	ctx.fillColor = "black"
+		  	for (var i = 0; i < users.length; i++) {
+		  		var user = users[i];
+		  		if (user.skeleton.joints) {
+		  			for (joint in user.skeleton.joints) {
+		 
+		  				var pos = user.skeleton.joints[joint].position;
+		  			
+		  				ctx.beginPath();
+						ctx.arc(pos.projective.x, pos.projective.y, 5, 0, 2 * Math.PI);
+						ctx.closePath();
+						ctx.fill();
+		  			}
+		  		}
+		  		
+			 }
+			  	
+			 ctx.restore();
+
+		} else {
+
+			// experiment with code from the snippets menu here
+			var j = 0;
+			for (var i = 0; i < users.length; i++) {
+		  		var user = users[i];
+		  		if (user.skeleton.joints) {
+		  			j = 0;
+		  			for (joint in user.skeleton.joints) {
+		  				var pos = user.skeleton.joints[joint].position;
+		  				meshes[j].position.x = pos.real.x;
+		  				meshes[j].position.y = pos.real.y;
+		  				meshes[j].position.z = -pos.real.z/2;
+		  				j++;
+		  			}
+		  		}
+		  		
+		  	}
+
+			renderer.render( scene, camera );
+		}
+
+	}
+
+	setup();
+	draw();
+
+	</script>
+
+</body>
+</html>
